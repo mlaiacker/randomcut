@@ -199,7 +199,7 @@ USAGE
 
         for inpath in paths:
             ### do something with inpath ###
-            print(inpath)
+            #print(inpath)
             randomcut.addPattern(inpath)
 
         randomcut.findClips()
@@ -218,10 +218,10 @@ USAGE
         return 2'''
 
 if __name__ == "__main__":
-    if DEBUG:
-        sys.argv.append("-h")
-        sys.argv.append("-v")
-        sys.argv.append("-r")
+    #if DEBUG:
+        #sys.argv.append("-h")
+        #sys.argv.append("-v")
+        #sys.argv.append("-r")
     if TESTRUN:
         import doctest
         doctest.testmod()

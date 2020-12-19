@@ -20,26 +20,20 @@ It defines classes_and_methods
 import sys
 import os
 from pathlib import Path
-
 from datetime import datetime
-
-
 import glob
-#from moviepy.editor import *
-
 import random
 import moviepy.editor as mp
-import moviepy.video.fx.all as vfx
 
 from argparse import ArgumentParser
 from argparse import RawDescriptionHelpFormatter
 
 __all__ = []
-__version__ = 0.1
+__version__ = 0.2
 __date__ = '2020-12-18'
-__updated__ = '2020-12-18'
+__updated__ = '2020-12-19'
 
-DEBUG = 1
+DEBUG = 0
 TESTRUN = 0
 PROFILE = 0
 
@@ -58,6 +52,7 @@ class RandomCut:
         self.movie_width = 1280
         self.movie_height = 720 
         self.movie_fps = 30
+        self.audio = True
             
 
     def addPattern(self, pattern:str):
@@ -69,6 +64,13 @@ class RandomCut:
     def setMaxClips(self, n:int):
         if n>1:
             self.clips_max_n = n
+    
+    def setAudio(self, audio_on):
+        if audio_on:
+            self.audio=True
+        else:
+            self.audio=False
+            
     def setClipLength(self, l:int):
         if l :
             if l>0:
@@ -100,7 +102,8 @@ class RandomCut:
             random.shuffle(clips_filenames)            
         for clip_name in clips_filenames:
             try:
-                clip = mp.VideoFileClip(str(clip_name), target_resolution=(self.movie_height, self.movie_width))
+                clip = mp.VideoFileClip(str(clip_name), target_resolution=(self.movie_height, self.movie_width),
+                                        audio=self.audio)
             except Exception as e:
                 if self.verbose>0:
                     print(str(clip_name),e)
@@ -127,7 +130,7 @@ class RandomCut:
                 continue
             if clip.fps<20:
                 if self.verbose>1:
-                    print(str(clip_name)," clip wrong fps", clip.fps)
+                    print(str(clip_name)," wrong fps", clip.fps)
                 clip.close()
                 continue
                 
@@ -178,7 +181,8 @@ class RandomCut:
         final_video = mp.concatenate_videoclips(clips)
         final_video.write_videofile(export_name, 
                                     fps = self.movie_fps,
-                                    codec='libx264')
+                                    codec='libx264',
+                                    audio=self.audio)
         return export_name
 
 class CLIError(Exception):
@@ -221,15 +225,16 @@ USAGE
     try:
         # Setup argument parser
         parser = ArgumentParser(description=program_license, formatter_class=RawDescriptionHelpFormatter)
-        parser.add_argument("-r", "--recursive", dest="recurse", action="store_true", help="recurse into subfolders [default: %(default)s]")
+        #parser.add_argument("-r", "--recursive", dest="recurse", action="store_true", help="recurse into subfolders [default: %(default)s]")
         parser.add_argument("-v", "--verbose", dest="verbose", action="count", help="set verbosity level [default: %(default)s]", default = 0)
-        parser.add_argument("-i", "--include", dest="include", help="only include paths matching this regex pattern. Note: exclude is given preference over include. [default: %(default)s]", metavar="RE" )
-        parser.add_argument("-e", "--exclude", dest="exclude", help="exclude paths matching this regex pattern. [default: %(default)s]", metavar="RE" )
+        #parser.add_argument("-i", "--include", dest="include", help="only include paths matching this regex pattern. Note: exclude is given preference over include. [default: %(default)s]", metavar="RE" )
+        #parser.add_argument("-e", "--exclude", dest="exclude", help="exclude paths matching this regex pattern. [default: %(default)s]", metavar="RE" )
         parser.add_argument('-V', '--version', action='version', version=program_version_message)
         parser.add_argument('-d', '--dir', help="directory to find clips in [default: %(default)s]", default=".", type=str, metavar="path")
         parser.add_argument('-n', '--num', help="max number of clips to use", default=300, type=int)
         parser.add_argument('-l', '--length', help="length of each clip[default: %(default)s]", default =5, type=int)
         parser.add_argument('-x', '--rand', help="random file name order", action="store_true")
+        parser.add_argument('--noaudio', help="no audio output", action="store_true")
         parser.add_argument(dest="paths", help="patterns of files to include [default: %(default)s]", nargs='+', default="*.mp4", metavar="pattern")
 
         # Process arguments
@@ -237,23 +242,24 @@ USAGE
 
         paths = args.paths
         verbose = args.verbose
-        recurse = args.recurse
-        inpat = args.include
-        expat = args.exclude
+        #recurse = args.recurse
+        #inpat = args.include
+        #expat = args.exclude
 
         if verbose > 0:
             print("Verbose mode on")
-            if recurse:
-                print("Recursive mode on")
-            else:
-                print("Recursive mode off")
+            #if recurse:
+            #    print("Recursive mode on")
+            #else:
+            #    print("Recursive mode off")
 
-        if inpat and expat and inpat == expat:
-            raise CLIError("include and exclude pattern are equal! Nothing will be processed.")
+        #if inpat and expat and inpat == expat:
+        #    raise CLIError("include and exclude pattern are equal! Nothing will be processed.")
         
         randomcut = RandomCut()
         randomcut.verbose = verbose
         randomcut.movie_random = args.rand
+        randomcut.setAudio(not args.noaudio)
         randomcut.setClipLength(args.length)
         randomcut.setDir(args.dir)
         randomcut.setMaxClips(args.num)
@@ -270,31 +276,14 @@ USAGE
     except KeyboardInterrupt:
         ### handle keyboard interrupt ###
         return 0
-'''    except Exception as e:
+    except Exception as e:
         if DEBUG or TESTRUN:
             raise(e)
         indent = len(program_name) * " "
         sys.stderr.write(program_name + ": " + repr(e) + "\n")
         sys.stderr.write(indent + "  for help use --help")
-        return 2'''
+        return 2
 
 if __name__ == "__main__":
-    #if DEBUG:
-        #sys.argv.append("-h")
-        #sys.argv.append("-v")
-        #sys.argv.append("-r")
-    if TESTRUN:
-        import doctest
-        doctest.testmod()
-    if PROFILE:
-        import cProfile
-        import pstats
-        profile_filename = 'randomcut_profile.txt'
-        cProfile.run('main()', profile_filename)
-        statsfile = open("profile_stats.txt", "wb")
-        p = pstats.Stats(profile_filename, stream=statsfile)
-        stats = p.strip_dirs().sort_stats('cumulative')
-        stats.print_stats()
-        statsfile.close()
-        sys.exit(0)
     sys.exit(main())
+    

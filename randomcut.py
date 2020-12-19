@@ -29,6 +29,7 @@ import glob
 
 import random
 import moviepy.editor as mp
+import moviepy.video.fx.all as vfx
 
 from argparse import ArgumentParser
 from argparse import RawDescriptionHelpFormatter
@@ -44,7 +45,7 @@ PROFILE = 0
 
 class RandomCut:
     def __init__(self):
-        self.hui = 1
+        self.verbose = 2
         self.glob_patterns = list()
         self.directroy = Path(".")
         self.movie_length = 0 # desired overall length
@@ -53,10 +54,10 @@ class RandomCut:
         self.clip_length_random = 3 # random range for clip length
         self.clip_offset = 1 # from beginning
         self.clip_all = True # use all available clips found
+        self.clips_max_n = 300
         self.movie_width = 1280
         self.movie_height = 720 
-        self.verbose = 2
-        self.clips_max_n = 300
+        self.movie_fps = 30
             
 
     def addPattern(self, pattern:str):
@@ -68,6 +69,11 @@ class RandomCut:
     def setMaxClips(self, n:int):
         if n>1:
             self.clips_max_n = n
+    def setClipLength(self, l:int):
+        if l :
+            if l>0:
+                self.clip_length = l
+                self.clip_length_random = l*0.5
         
     def findClips(self):
         self.clips_filenames = list()
@@ -75,7 +81,7 @@ class RandomCut:
             p= str(self.directroy) + "/" + pattern
             filenames = glob.glob(p, recursive=True)
             for f in filenames:
-                self.clips_filenames.append(f)
+                self.clips_filenames.append(str(Path(f)))
         self.clips_filenames.sort()
         #print(self.clips_filenames)
         
@@ -88,13 +94,43 @@ class RandomCut:
         if self.clip_length<=0:
             self.clip_length = 1
              
-        clips_filenames =  self.clips_filenames
+        subtitle = ""
+        clips_filenames =  self.clips_filenames.copy()
         if self.movie_random:
-            clips_filenames=  random.shuffle(self.clips_filenames)
+            random.shuffle(clips_filenames)            
         for clip_name in clips_filenames:
-            clip = mp.VideoFileClip(str(clip_name))
-            if clip.duration<5.0+self.clip_offset:
+            try:
+                clip = mp.VideoFileClip(str(clip_name), target_resolution=(self.movie_height, self.movie_width))
+            except Exception as e:
+                if self.verbose>0:
+                    print(str(clip_name),e)
                 continue
+            if clip.duration<self.clip_length*1.5+self.clip_offset:
+                if self.verbose>1:
+                    print(str(clip_name)," too short:", clip.duration, "s")
+                clip.close()
+                continue
+            if clip.aspect_ratio<1:
+                if self.verbose>1:
+                    print(str(clip_name)," skip vertical video", clip.aspect_ratio)
+                clip.close()
+                continue
+            if clip.w<640: #self.movie_width:
+                if self.verbose>1:
+                    print(str(clip_name)," clip too narrow", clip.w)
+                clip.close()
+                continue
+            if clip.h<480:#self.movie_height:
+                if self.verbose>1:
+                    print(str(clip_name)," clip too small", clip.h)
+                clip.close()
+                continue
+            if clip.fps<20:
+                if self.verbose>1:
+                    print(str(clip_name)," clip wrong fps", clip.fps)
+                clip.close()
+                continue
+                
             length = self.clip_length
             if self.clip_length_random>0:
                 r = self.clip_length_random
@@ -102,26 +138,47 @@ class RandomCut:
                     r = self.clip_length -1
                 if r>=1:
                     length = random.randint(int(self.clip_length-r), int(self.clip_length+r))
+                if length == 0:
+                    length = 1
             start = 0
             if length > clip.duration - self.clip_offset:
                 length = clip.duration - self.clip_offset
             else:
                 start = random.randint(int(self.clip_offset), int(clip.duration- length))
-            if self.verbose>1:
-                print(clip_name, clip.duration, start, start + length)
+            if self.verbose>0:
+                print(clip_name, int(clip.duration), start,  length)
             clips.append(clip.subclip(start, start + length))
+#            clips.append(clip.resize(height=self.movie_height).subclip(start, start + length))
+#            clips.append(clip.fx(vfx.resize, height=self.movie_height).subclip(start, start + length))
+            subtitle += str(n+1)+"\n"
+            movie_total_end = movie_total + length
+            subtitle += "{:02d}:{:02d}:{:02d} --> {:02d}:{:02d}:{:02d}\n".format(int(movie_total/60/60), int(movie_total/60%60), int(movie_total%60),
+                                                                                 int(movie_total_end/60/60), int(movie_total_end/60%60), int(movie_total_end%60))
+            subtitle += str(clip_name)+"\n\n"
             movie_total += length
-            if n> self.clips_max_n:
+            if n+1>= self.clips_max_n:
                 break
             n+=1
         
+        collection = Path(self.directroy).resolve().stem
+        if collection !="":
+            collection = "_"+collection
         now = datetime.now()
         date_time = now.strftime("%Y-%m-%d_%H-%M-%S")
-        export_name = "randomcut_"+date_time+".mp4"
-        if self.verbose>0:
+        export_name = "./randomcut_"+date_time+collection+".mp4"
+        if self.verbose>1:
             print("export to:", export_name, movie_total)
+        try:
+            f = open(Path(export_name).with_suffix('.srt'),"w+")
+            f.write(subtitle)
+            f.close()
+        except Exception as e:
+            if self.verbose>0:
+                print("subtitle failed:",e)
         final_video = mp.concatenate_videoclips(clips)
-        final_video.write_videofile(export_name)
+        final_video.write_videofile(export_name, 
+                                    fps = self.movie_fps,
+                                    codec='libx264')
         return export_name
 
 class CLIError(Exception):
@@ -169,8 +226,10 @@ USAGE
         parser.add_argument("-i", "--include", dest="include", help="only include paths matching this regex pattern. Note: exclude is given preference over include. [default: %(default)s]", metavar="RE" )
         parser.add_argument("-e", "--exclude", dest="exclude", help="exclude paths matching this regex pattern. [default: %(default)s]", metavar="RE" )
         parser.add_argument('-V', '--version', action='version', version=program_version_message)
-        parser.add_argument('-d', '--dir', help="directory to find clips in", default=".", type=str, metavar="path")
-        parser.add_argument('-n', '--max', help="max number of clips to use", default=300, type=int)
+        parser.add_argument('-d', '--dir', help="directory to find clips in [default: %(default)s]", default=".", type=str, metavar="path")
+        parser.add_argument('-n', '--num', help="max number of clips to use", default=300, type=int)
+        parser.add_argument('-l', '--length', help="length of each clip[default: %(default)s]", default =5, type=int)
+        parser.add_argument('-x', '--rand', help="random file name order", action="store_true")
         parser.add_argument(dest="paths", help="patterns of files to include [default: %(default)s]", nargs='+', default="*.mp4", metavar="pattern")
 
         # Process arguments
@@ -193,9 +252,11 @@ USAGE
             raise CLIError("include and exclude pattern are equal! Nothing will be processed.")
         
         randomcut = RandomCut()
-        randomcut.setDir(args.dir)
-        randomcut.setMaxClips(args.max)
         randomcut.verbose = verbose
+        randomcut.movie_random = args.rand
+        randomcut.setClipLength(args.length)
+        randomcut.setDir(args.dir)
+        randomcut.setMaxClips(args.num)
 
         for inpath in paths:
             ### do something with inpath ###

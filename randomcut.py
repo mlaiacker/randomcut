@@ -80,10 +80,16 @@ class RandomCut:
     def findClips(self):
         self.clips_filenames = list()
         for pattern in self.glob_patterns:
-            p= str(self.directroy) + "/" + pattern
+            p= str(self.directroy) + "/" + pattern.lower()
             filenames = glob.glob(p, recursive=True)
             for f in filenames:
                 self.clips_filenames.append(str(Path(f)))
+            p= str(self.directroy) + "/" + pattern.upper()
+            filenames = glob.glob(p, recursive=True)
+            for f in filenames:
+                self.clips_filenames.append(str(Path(f)))
+        
+        self.clips_filenames = list(dict.fromkeys(self.clips_filenames))
         self.clips_filenames.sort()
         #print(self.clips_filenames)
         
@@ -99,8 +105,19 @@ class RandomCut:
         subtitle = ""
         clips_filenames =  self.clips_filenames.copy()
         if self.movie_random:
-            random.shuffle(clips_filenames)            
+            random.shuffle(clips_filenames)
+        clips_count = len(clips_filenames)
+        skip_propability = 0;
+        if clips_count>self.clips_max_n: 
+            skip_propability = (clips_count - self.clips_max_n)/clips_count
+            if self.verbose>1:
+                print("clips found", str(clips_count))             
         for clip_name in clips_filenames:
+            if  skip_propability>0:
+                if random.random()<skip_propability:
+                    if self.verbose>0:
+                        print("skip", clip_name)
+                    continue
             try:
                 clip = mp.VideoFileClip(str(clip_name), target_resolution=(self.movie_height, self.movie_width),
                                         audio=self.audio)
@@ -170,7 +187,7 @@ class RandomCut:
         date_time = now.strftime("%Y-%m-%d_%H-%M-%S")
         export_name = "./randomcut_"+date_time+collection+".mp4"
         if self.verbose>1:
-            print("export to:", export_name, movie_total)
+            print("export clips:", str(n+1), movie_total)
         try:
             f = open(Path(export_name).with_suffix('.srt'),"w+")
             f.write(subtitle)

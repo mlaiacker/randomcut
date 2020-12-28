@@ -1,6 +1,16 @@
 # randomcut
 create a movie with random short clips from video files using moviepy
 
+## install
+
+easy:
+
+```
+sudo apt install ffmpeg python
+python -m pip install moviepy
+```
+and then download randomcut.py
+
 ## usage
 
 
@@ -27,9 +37,6 @@ optional arguments:
   -h, --help            show this help message and exit
   -r, --recursive       recurse into subfolders [default: False]
   -v, --verbose         set verbosity level [default: 0]
-  -i RE, --include RE   only include paths matching this regex pattern. Note: exclude is given preference over include.
-                        [default: None]
-  -e RE, --exclude RE   exclude paths matching this regex pattern. [default: None]
   -V, --version         show program's version number and exit
   -d path, --dir path   directory to find clips in [default: .]
   -n NUM, --num NUM     max number of clips to use

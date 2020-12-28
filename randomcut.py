@@ -125,7 +125,7 @@ class RandomCut:
                 if self.verbose>0:
                     print(str(clip_name),e)
                 continue
-            if clip.duration<self.clip_length*1.5+self.clip_offset:
+            if clip.duration<self.clip_length+self.clip_offset:
                 if self.verbose>1:
                     print(str(clip_name)," too short:", clip.duration, "s")
                 clip.close()
